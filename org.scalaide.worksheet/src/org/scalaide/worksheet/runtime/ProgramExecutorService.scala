@@ -109,6 +109,7 @@ private class ProgramExecutorService private () extends DaemonActor with HasLogg
           running()
 
         case msg @ StopRun(unitId) => ignoreStopRun(msg)
+        case WorksheetRunner.Stop  => stop()
         case msg: Exit             => resetStateOnSlaveFailure(msg)
         case any => logger.debug(this.toString + ": swallow message " + any)
       }
@@ -119,6 +120,13 @@ private class ProgramExecutorService private () extends DaemonActor with HasLogg
     case msg: StopRun => if (msg.getId == id) reset() else ignoreStopRun(msg)
     case FinishedRun  => reset()
     case msg: Exit    => resetStateOnSlaveFailure(msg)
+    case WorksheetRunner.Stop  => stop()
+  }
+  
+  private def stop(): Unit = {
+    logger.debug("Stopping "+this)
+    reset()
+    exit()
   }
 
   private def resetStateOnSlaveFailure(exit: Exit): Unit = {

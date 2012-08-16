@@ -12,12 +12,16 @@ object WorksheetPlugin {
   def getImageDescriptor(path: String) = {
     AbstractUIPlugin.imageDescriptorFromPlugin(PLUGIN_ID, path);
   }
+  
+  
 }
 
 class WorksheetPlugin extends AbstractUIPlugin {
   override def start(context: BundleContext) = {
     super.start(context)
     WorksheetPlugin.plugin = this
+//    if(!ScalaPlugin.plugin.headlessMode)
+//      WorksheetPlugin.getWorkbenchWindow map (_.getPartService().addPartListener(worbenchPartListener))
   }
 
   override def stop(context: BundleContext) = {

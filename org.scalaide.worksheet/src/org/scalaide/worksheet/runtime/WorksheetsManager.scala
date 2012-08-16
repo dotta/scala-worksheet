@@ -4,6 +4,7 @@ import scala.actors.{ Actor, DaemonActor }
 import scala.collection.mutable
 import scala.tools.eclipse.ScalaProject
 import org.scalaide.worksheet.ScriptCompilationUnit
+import scala.tools.eclipse.logging.HasLogger
 
 object WorksheetsManager {
   lazy val Instance: Actor = {
@@ -13,12 +14,13 @@ object WorksheetsManager {
   }
 }
 
-private class WorksheetsManager private extends DaemonActor {
+private class WorksheetsManager private extends DaemonActor with HasLogger {
   import WorksheetRunner.RunEvaluation
   import ProgramExecutorService.StopRun
 
-  //FIXME: Need a way to dispose worksheet evaluator and remove it from the map when the project is disposed (listener!?)
-  private val scalaProject2worksheetEvaluator: mutable.Map[ScalaProject, Actor] = new mutable.HashMap
+  private case class WorksheetState(scalaProject: ScalaProject, worksheetRunner: Actor)
+
+  private var activeWorksheetRunner: WorksheetState = _
 
   override def act() = loop {
     react {
@@ -33,19 +35,30 @@ private class WorksheetsManager private extends DaemonActor {
   }
 
   private def forwardIfEvaluatorExists(msg: StopRun): Unit = {
-    val scalaProject = msg.unit.scalaProject
-    for (evaluator <- scalaProject2worksheetEvaluator.get(scalaProject))
-      evaluator forward msg
+    if (activeWorksheetRunner == null) logger.info("No active worksheet runner. Ignoring " + msg)
+    else {
+      val scalaProject = msg.unit.scalaProject
+      if (scalaProject != activeWorksheetRunner.scalaProject) logger.info("No running evaluation for worksheet `" + msg.unit.file.name + "`. Ignoring " + msg)
+      else {
+        assert(activeWorksheetRunner.scalaProject == scalaProject)
+        activeWorksheetRunner.worksheetRunner forward msg
+      }
+    }
   }
 
   private def obtainEvaluator(unit: ScriptCompilationUnit): Actor = {
     val scalaProject = unit.scalaProject
-    scalaProject2worksheetEvaluator.get(scalaProject) match {
-      case Some(evaluator) => evaluator
-      case None =>
-        val evaluator = WorksheetRunner(scalaProject)
-        scalaProject2worksheetEvaluator += (scalaProject -> evaluator)
-        evaluator
+    def createNewRunner(): Actor = {
+       val evaluator = WorksheetRunner(scalaProject)
+      WorksheetState(scalaProject, evaluator)
+      evaluator
+    }
+    
+    if (activeWorksheetRunner == null) createNewRunner()
+    else if(activeWorksheetRunner.scalaProject == scalaProject) activeWorksheetRunner.worksheetRunner
+    else {
+      activeWorksheetRunner.worksheetRunner ! WorksheetRunner.Stop
+      createNewRunner()
     }
   }
 

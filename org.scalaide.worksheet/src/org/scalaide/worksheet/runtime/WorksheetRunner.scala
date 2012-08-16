@@ -28,6 +28,7 @@ object WorksheetRunner {
 
   trait Msg
   case class RunEvaluation(unit: ScriptCompilationUnit, editor: EditorProxy) extends Msg
+  case object Stop extends Msg
 }
 
 /** An evaluator for worksheet documents.
@@ -70,9 +71,18 @@ private class WorksheetRunner private (scalaProject: ScalaProject) extends Daemo
           logger.info("forwarding " + msg + " to " + runner)
           runner forward msg
 
+        case Stop =>
+          runner ! Stop
+          stop()
+          
         case any => exit("Unsupported message " + any)
       }
     }
+  }
+  
+  private def stop(): Unit = {
+    logger.debug("Stopping "+this)
+    exit()
   }
 
   private def classpath: Seq[File] = {
